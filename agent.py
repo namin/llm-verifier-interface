@@ -6,12 +6,17 @@ agent is the `run_turn` while-loop near the bottom: send the conversation + the
 tools to the LLM, run any tools it asks for, append the results, and repeat
 until it stops asking for tools.
 
-Run (AWS Bedrock):
+Run (AWS Bedrock — the default):
     pip install "anthropic[bedrock]"
     # AWS credentials configured (aws configure / SSO / env) with Bedrock access
     # to a Claude model in your region:
     export AWS_REGION=us-east-1
     export AGENT_MODEL=us.anthropic.claude-sonnet-4-6
+    python agent.py
+
+Run (direct Anthropic API — used when ANTHROPIC_API_KEY is set):
+    pip install anthropic
+    export ANTHROPIC_API_KEY=sk-ant-...
     python agent.py
 """
 
@@ -20,13 +25,22 @@ import subprocess
 from dataclasses import dataclass
 from typing import Callable
 
-from anthropic import AnthropicBedrock
+# Use the direct Anthropic API when ANTHROPIC_API_KEY is set; otherwise Bedrock.
+USE_BEDROCK = not os.environ.get("ANTHROPIC_API_KEY")
 
-# A Bedrock model id, or a cross-region inference-profile id, that you have
-# access to. List what's available with:
+if USE_BEDROCK:
+    from anthropic import AnthropicBedrock
+else:
+    from anthropic import Anthropic
+
+# A Bedrock model id / cross-region inference-profile id (default), or a plain
+# Anthropic model id when using the direct API. List Bedrock profiles with:
 #   aws bedrock list-inference-profiles \
 #     --query 'inferenceProfileSummaries[].inferenceProfileId'
-MODEL = os.environ.get("AGENT_MODEL", "us.anthropic.claude-sonnet-4-6")
+MODEL = os.environ.get(
+    "AGENT_MODEL",
+    "us.anthropic.claude-sonnet-4-6" if USE_BEDROCK else "claude-sonnet-4-6",
+)
 
 SYSTEM_PROMPT = """You are a small coding assistant with access to tools.
 Use the tools to inspect files, edit files, and run commands. Be concise."""
@@ -162,7 +176,7 @@ def run_turn(client, tools, messages, session_allow):
 
 
 def main(tools=DEFAULT_TOOLS):
-    client = AnthropicBedrock()           # uses your AWS credentials + region
+    client = AnthropicBedrock() if USE_BEDROCK else Anthropic()
     messages, session_allow = [], set()
     print("pure agent — Ctrl-C to quit\n")
     while True:
