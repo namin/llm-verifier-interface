@@ -143,6 +143,12 @@ def run_turn(client, tools, messages, session_allow):
             tools=[t.spec() for t in tools],
             messages=messages,
         )
+        # Drop any cut-off reply: a half-written tool_use block left in
+        # `messages` would break every later request.
+        if reply.stop_reason == "max_tokens":
+            print("[reply was cut off at the max_tokens limit and discarded]")
+            return
+
         # Append the model's own content blocks straight back, then print text.
         messages.append({"role": "assistant", "content": reply.content})
         for block in reply.content:
