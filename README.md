@@ -20,6 +20,12 @@
 
 - [claimcheck](https://github.com/metareflection/claimcheck): Dafny verifies proofs; claimcheck confirms intent — round-trip informalization, blinded, then compared against the requirement
 
+## Verifying Agents
+
+- [Guardians of the Agents](https://cacm.acm.org/practice/guardians-of-the-agents/): prompt injection is mixing code and data; have the LLM plan first, verify the plan, then execute (Meijer, CACM 2026)
+- [guardians](https://github.com/metareflection/guardians): a Python implementation: taint analysis, security automata, and Z3 preconditions on agent plans
+- [guardians-lemmascript](https://github.com/midspiral/guardians-lemmascript): the checks themselves proved sound in Dafny via LemmaScript; can be wired into henri-lemmascript
+
 ## Verification for Training Signal
 
 - formal-disco: verified discovery systems to generate hundreds of thousands of verified programs in Dafny, Verus, Frama-C, ..., to use as training data. Inspired by [dafny-annotator](https://github.com/metareflection/dafny-annotator), which boosted Llama 3.1 8B from 15.7% to 50.6% on annotating [DafnyBench](https://github.com/sun-wendy/DafnyBench) by fine-tuning on synthetic verified programs.
