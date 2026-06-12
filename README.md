@@ -16,9 +16,17 @@
 - [COPRA](https://github.com/trishullab/copra): tactic-by-tactic proving in Lean or Rocq, with error feedback and backtracking
 - [CEGIS](https://people.csail.mit.edu/asolar/SynthesisCourse/Lecture17.htm): the classical loop: propose, verify, accumulate counterexamples
 
+## Decomposition
+
+- [Draft, Sketch, and Prove](https://arxiv.org/abs/2210.12283): informal proofs guide formal proof sketches; the sketch's holes need only each other's statements, not each other's proofs
+- [POETRY](https://arxiv.org/abs/2405.14414): recursive level-by-level proving: sketch with `sorry` placeholders, then solve each hole; the longest proof found grows from 10 to 26 lines
+- [LEGO-Prover](https://arxiv.org/abs/2310.00656): proven lemmas accumulate into a growing library of reusable skills
+
 ## Autoformalization
 
 - [claimcheck](https://github.com/metareflection/claimcheck): Dafny verifies proofs; claimcheck confirms intent — round-trip informalization, blinded, then compared against the requirement
+- [Clover](https://github.com/ChuyueSun/Clover): faithfulness by triangulation: generated code, specs, and docstrings must agree
+- [CLEVER](https://github.com/trishullab/clever): the end-to-end benchmark: synthesize spec, code, and proof in Lean — 1 of 161 solved at introduction
 
 ## Verifying Agents
 
