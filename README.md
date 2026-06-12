@@ -24,6 +24,7 @@
 
 ## Autoformalization
 
+- translating from informal to formal: for example, a word problem into a query for an SMT solver
 - [claimcheck](https://github.com/metareflection/claimcheck): Dafny verifies proofs; claimcheck confirms intent — round-trip informalization, blinded, then compared against the requirement
 - [Clover](https://github.com/ChuyueSun/Clover): faithfulness by triangulation: generated code, specs, and docstrings must agree
 - [CLEVER](https://github.com/trishullab/clever): the end-to-end benchmark: synthesize spec, code, and proof in Lean — 1 of 161 solved at introduction
