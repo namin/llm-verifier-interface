@@ -5,7 +5,7 @@
 - [agent.py](agent.py): the essence of an agentic loop in Python
 - [dafny_agent.py](dafny_agent.py): shows how to add an explicit tool for Dafny to the agent
 - [henri](https://github.com/metareflection/henri): a slightly bigger agentic loop in Python
-- [henri-lemmascript](https://github.com/midspiral/henri-lemmascript): a port of henri to LemmaScript
+- [henri-lemmascript](https://github.com/midspiral/henri-lemmascript): a port of henri to [LemmaScript](https://github.com/midspiral/LemmaScript)
 - [pi](https://github.com/earendil-works/pi): an extensible AI agent toolkit in TypeScript
 - [opencode](https://github.com/anomalyco/opencode): an open source coding agent in TypeScript
 
