@@ -1,5 +1,8 @@
 # The LLM-Verifier Interface
 
+Based on lectures on the LLM-Verifier Interface at the Summer School on Foundations of Programming and Software Systems (FoPSS 2026).
+See the [abstract](abstract.md).
+
 ## Agents like Claude Code
 
 - [agent.py](agent.py): the essence of an agentic loop in Python
@@ -29,11 +32,22 @@
 - [Clover](https://github.com/ChuyueSun/Clover): faithfulness by triangulation: generated code, specs, and docstrings must agree
 - [CLEVER](https://github.com/trishullab/clever): the end-to-end benchmark: synthesize spec, code, and proof in Lean — 1 of 161 solved at introduction
 
+## Verifying in Mainstream Languages
+
+- [LemmaScript](https://github.com/midspiral/LemmaScript): verifying TypeScript, via Dafny or Lean
+- [Verus](https://github.com/verus-lang/verus): verifying Rust, with proofs written in Rust syntax, discharging to an SMT solver
+- [Frama-C](https://frama-c.com/): verifying C, with [ACSL](https://github.com/fraunhoferfokus/acsl-by-example/blob/master/ACSL-by-Example.pdf) contracts
+
 ## Verifying Agents
 
 - [Guardians of the Agents](https://cacm.acm.org/practice/guardians-of-the-agents/): prompt injection is mixing code and data; have the LLM plan first, verify the plan, then execute (Meijer, CACM 2026)
 - [guardians](https://github.com/metareflection/guardians): a Python implementation: taint analysis, security automata, and Z3 preconditions on agent plans
 - [guardians-lemmascript](https://github.com/midspiral/guardians-lemmascript): the checks themselves proved sound in Dafny via LemmaScript; can be wired into henri-lemmascript
+
+## Self-Improving Agents
+
+- the self-edit gate: a self-modification must verify before it is adopted — adopt on green, reject and roll back
+- verified self-edits become training data, closing the loop with verification for training signal
 
 ## Verification for Training Signal
 
