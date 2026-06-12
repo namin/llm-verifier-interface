@@ -13,3 +13,4 @@
 
 - [verifier_loop.py](verifier_loop.py): generate, verify, retry until Dafny accepts
 - [VerMCTS](https://github.com/namin/llm-verified-with-monte-carlo-tree-search): the retry generalized to Monte Carlo tree search on partial programs guided by the verifier
+- [COPRA](https://github.com/trishullab/copra): tactic-by-tactic proving in Lean or Rocq, with error feedback and backtracking
