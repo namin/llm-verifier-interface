@@ -46,6 +46,11 @@ See the [abstract](abstract.md).
 
 ## Self-Improving Agents
 
+- [Darwin Gödel Machine](https://arxiv.org/abs/2505.22954): benchmark-gated self-edits
+- [SICA](https://arxiv.org/abs/2504.15228): a coding agent that rewrites its own implementation
+- [STOP](https://arxiv.org/abs/2310.02304): a scaffolding program that improves itself, utility-gated
+- [Gödel Agent](https://arxiv.org/abs/2410.04444): the agent may edit its own improvement machinery; self-destruction by editing is a documented failure mode
+- [AlphaEvolve](https://arxiv.org/abs/2506.13131): evolutionary search over code, scored by an automated evaluator
 - the self-edit gate: a self-modification must verify before it is adopted — adopt on green, reject and roll back
 - verified self-edits become training data, closing the loop with verification for training signal
 
