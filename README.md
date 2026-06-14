@@ -34,9 +34,9 @@ See the [abstract](abstract.md).
 ## Decomposition
 
 - [Draft, Sketch, and Prove](https://arxiv.org/abs/2210.12283): informal proofs guide formal proof sketches; the sketch's holes need only each other's statements, not each other's proofs
+- [sketch.py](sketch.py): Draft-Sketch-Prove in miniature — the LLM sketches the main proof against helper lemma *statements* (holes are Dafny's `assume false;`, the `sorry` analogue); each hole is then filled on its own, given only the others' statements; assemble for a fully sound proof
 - [POETRY](https://arxiv.org/abs/2405.14414): recursive level-by-level proving: sketch with `sorry` placeholders, then solve each hole; the longest proof found grows from 10 to 26 lines
 - [LEGO-Prover](https://arxiv.org/abs/2310.00656): proven lemmas accumulate into a growing library of reusable skills
-- [sketch.py](sketch.py): Draft-Sketch-Prove in miniature — the LLM sketches the main proof against helper lemma *statements* (holes are Dafny's `assume false;`, the `sorry` analogue); each hole is then filled on its own, given only the others' statements; assemble for a fully sound proof
 
 ## Autoformalization
 
