@@ -30,7 +30,6 @@ See the [abstract](abstract.md).
 - [Baldur](https://arxiv.org/abs/2303.04910): repair from the error message, not the pass/fail bit — the model gets the failed proof and Isabelle/HOL's error text, and rewrites (First, Rabe, Ringer, Brun, ESEC/FSE 2023)
 - [HyperTree Proof Search](https://arxiv.org/abs/2205.11491): a learned critic scores each open goal's provability, composing up a partial proof tree to guide AlphaZero-style search (Lample et al., NeurIPS 2022)
 - [Math-Shepherd](https://arxiv.org/abs/2312.08935): no oracle grades a half-finished argument, so score a step by the fraction of rollouts from it that reach the right answer — a process reward without human labels (Wang et al. 2023)
-- [Gradual Program Verification](http://www.cs.cmu.edu/~aldrich/papers/vmcai2018-gradual-verification.pdf): partiality in the spec, not the search — a contract `φ ∧ ?` is checked statically for `φ` and by runtime checks for `?`, sound either way (Bader, Aldrich, Tanter, VMCAI 2018)
 
 ## Decomposition
 
