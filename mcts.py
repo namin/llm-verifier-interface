@@ -139,6 +139,21 @@ def backprop(node) -> None:
         node = node.parent
 
 
+# UCT — the selection rule. The full PUCT (VerMCTS, and on the slides) is
+#
+#     score(s,a) = mean(s,a) + c_UCT * p(s,a) * sqrt( log N(s) / (1 + N(s,a)) )
+#
+# where mean(s,a) (the slide's X-bar) averages the verifier feedback and the
+# policy prior p(s,a) drives progressive widening: which child to add, and
+# whether to widen at all. This toy has a uniform policy and a fixed branching of
+# three, so p(s,a) is constant and there is nothing to widen — it would be dead
+# weight here. Dropping it leaves plain UCT,
+#
+#     score = W/N + c * sqrt( log N(parent) / N ),
+#
+# with W/N = mean(s,a). The `1 + N(s,a)` smoothing is unneeded too: every child is
+# evaluated and backpropagated the moment it is created, so N >= 1 before
+# selection ever scores it (no zero to guard against).
 def uct(node, c) -> float:
     return node.W / node.N + c * math.sqrt(math.log(node.parent.N) / node.N)
 
