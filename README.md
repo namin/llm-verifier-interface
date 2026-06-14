@@ -17,12 +17,12 @@ See the [abstract](abstract.md).
 - [verifier_loop.py](verifier_loop.py): generate, verify, retry until Dafny accepts
 - [VerMCTS](https://github.com/namin/llm-verified-with-monte-carlo-tree-search): the retry generalized to Monte Carlo tree search on partial programs guided by the verifier
 - [mcts.py](mcts.py): the search pillar in miniature — MCTS with the verifier in place of the rollout (prune the provably dead, optimistically value the still-feasible); a controlled head-to-head shows it beat best-of-N at equal policy, verifier, and budget, on structure alone
-- [ChopChop](https://arxiv.org/abs/2509.00360): the verifier moves *into the decoder* — constrained decoding that only emits programs satisfying a semantic property (equivalence to a reference, type safety), cast as a realizability problem solved by coinduction; correct-by-construction instead of generate-then-check (Nagy, Zhou, Polikarpova, D'Antoni, POPL 2026)
 - [COPRA](https://github.com/trishullab/copra): tactic-by-tactic proving in Lean or Rocq, with error feedback and backtracking
 - [CEGIS](https://people.csail.mit.edu/asolar/SynthesisCourse/Lecture17.htm): the classical loop: propose, verify, accumulate counterexamples
 - [cegis.py](cegis.py): CEGIS with an LLM as the synthesizer and Z3 as the verifier — the verifier returns a concrete counterexample on every failure, and they accumulate into the spec; the accumulation is the part [verifier_loop.py](verifier_loop.py) leaves out
 - [AlphaGeometry](https://www.nature.com/articles/s41586-023-06747-5): the language model only proposes auxiliary constructions; a symbolic deduction engine does the proving and the loop retries until it closes — neuro-symbolic olympiad geometry, trained from scratch on ~100M synthetic theorems, solving 25 of 30 IMO problems (Trinh et al., Nature 2024); [AlphaGeometry2](https://arxiv.org/abs/2502.03544): gold-medal level, and finds the proposer's bespoke formal language doesn't matter — a generic Gemini does as well (Chervonyi et al. 2025)
 - [Lemur](https://arxiv.org/abs/2310.04870): the program-verification analog — the LLM proposes invariants as sub-goals, automated reasoners validate them, and the propose-and-validate calculus is proved sound, so the verdict holds regardless of what the LLM says (Wu, Barrett, Narodytska, ICLR 2024)
+- [ChopChop](https://arxiv.org/abs/2509.00360): the verifier moves *into the decoder* — constrained decoding that only emits programs satisfying a semantic property (equivalence to a reference, type safety), cast as a realizability problem solved by coinduction; correct-by-construction instead of generate-then-check (Nagy, Zhou, Polikarpova, D'Antoni, POPL 2026)
 
 ## Partial Verification
 
