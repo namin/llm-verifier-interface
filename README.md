@@ -53,6 +53,7 @@ The asymmetry: a learned proxy is gameable where a kernel verdict is not, and in
 ## Autoformalization
 
 - translating from informal to formal: for example, a word problem into a query for an SMT solver
+- vacuity: a deductive verifier silently accepts a proof that leans on contradictory assumptions — make the `requires` unsatisfiable and every `ensures` holds, so the spec passed but means nothing. Dafny flags it by tracking whether the proof ever used its goal ([`--warn-contradictory-assumptions`](https://dafny.org/blog/2023/10/27/proof-dependencies/)); the general idea is older, from detecting vacuous passes in model checking (Beer, Ben-David, Eisner, Rodeh, CAV 1997)
 - [claimcheck](https://github.com/metareflection/claimcheck): Dafny verifies proofs; claimcheck confirms intent — round-trip informalization, blinded, then compared against the requirement
 - [Clover](https://github.com/ChuyueSun/Clover): faithfulness by triangulation: generated code, specs, and docstrings must agree
 - [CLEVER](https://github.com/trishullab/clever): the end-to-end benchmark: synthesize spec, code, and proof in Lean — 1 of 161 solved at introduction
