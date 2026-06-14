@@ -16,6 +16,7 @@ See the [abstract](abstract.md).
 
 - [verifier_loop.py](verifier_loop.py): generate, verify, retry until Dafny accepts
 - [VerMCTS](https://github.com/namin/llm-verified-with-monte-carlo-tree-search): the retry generalized to Monte Carlo tree search on partial programs guided by the verifier
+- [mcts.py](mcts.py): the search pillar in miniature — MCTS with the verifier in place of the rollout (prune the provably dead, optimistically value the still-feasible); a controlled head-to-head shows it beat best-of-N at equal policy, verifier, and budget, on structure alone
 - [ChopChop](https://arxiv.org/abs/2509.00360): the verifier moves *into the decoder* — constrained decoding that only emits programs satisfying a semantic property (equivalence to a reference, type safety), cast as a realizability problem solved by coinduction; correct-by-construction instead of generate-then-check (Nagy, Zhou, Polikarpova, D'Antoni, POPL 2026)
 - [COPRA](https://github.com/trishullab/copra): tactic-by-tactic proving in Lean or Rocq, with error feedback and backtracking
 - [CEGIS](https://people.csail.mit.edu/asolar/SynthesisCourse/Lecture17.htm): the classical loop: propose, verify, accumulate counterexamples
