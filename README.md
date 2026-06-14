@@ -26,22 +26,11 @@ See the [abstract](abstract.md).
 
 ## Partial Verification
 
-A verifier's verdict is one bit, at the end. The systems that work turn it into a dense signal over unfinished work; [verifier_loop.py](verifier_loop.py) is the baseline that doesn't. Three ways to get one:
-
-Read the verifier's intermediate output — proof state (COPRA), still-feasible prefixes ([mcts.py](mcts.py)), accumulated counterexamples ([cegis.py](cegis.py)), discharged holes ([sketch.py](sketch.py)):
-- [Baldur](https://arxiv.org/abs/2303.04910): repair from the error message, not the pass/fail bit — the model gets the theorem, the failed proof, and Isabelle/HOL's error text, and rewrites (First, Rabe, Ringer, Brun, ESEC/FSE 2023)
-
-Learn a proxy that scores partial work, where the verifier won't:
-- [GPT-f](https://arxiv.org/abs/2009.03393): an outcome objective trains the model to emit a P/N token for whether an open goal will close — provability read off the model, no value head — reordering best-first search; labels bootstrapped from the verifier over expert-iteration rounds (Polu, Sutskever 2020)
-- [HyperTree Proof Search](https://arxiv.org/abs/2205.11491): a critic scores `P(provable | goal)`, and the scores multiply up an AND/OR proof hypertree to value a partial proof, driving AlphaZero-style search trained online (Lample et al., NeurIPS 2022)
-- [Let's Verify Step by Step](https://arxiv.org/abs/2305.20050): grading every step beats grading only the answer — but the labels are human (PRM800K), because nothing automatic grades a half-finished argument (Lightman et al., 2023)
-- [Math-Shepherd](https://arxiv.org/abs/2312.08935): automate those labels — a step's value is the fraction of rollouts from it that reach the right answer; they train the reward model and the per-step PPO signal (Wang et al. 2023)
-
-Put the partiality in the spec, not the search:
-- [Gradual Program Verification](http://www.cs.cmu.edu/~aldrich/papers/vmcai2018-gradual-verification.pdf): a contract `φ ∧ ?` is proved statically for `φ` and backed by runtime checks for `?`; adding precision only surfaces failures earlier, with the static system's soundness intact (Bader, Aldrich, Tanter, VMCAI 2018)
-- [ICE](https://madhu.cs.illinois.edu/CAV14ice.pdf): learn loop invariants from examples, counterexamples, and implication pairs `(p, p′)` — the implications let the teacher flag non-inductiveness without guessing whether to add `p′` or drop `p`, which is what makes the learner converge (Garg, Löding, Madhusudan, Neider, CAV 2014)
-
-The asymmetry: a learned proxy is gameable where a kernel verdict is not, and informal reasoning can only estimate partial credit — but a proof assistant grades fragments for free, dense and sound at once. [FoVer](https://arxiv.org/abs/2505.15960) has Z3 and Isabelle label each step (Kamoi et al., ACL 2026 Findings); [Process-Verified RL via Lean](https://openreview.net/forum?id=P00k4DFaXF) reads per-tactic credit off Lean's elaborator and folds it into the reward (Kim, Yun, ICLR 2026) — the dense form of the terminal signal [AlphaProof](https://www.nature.com/articles/s41586-025-09833-y) and [DeepSeek-Prover](https://github.com/deepseek-ai/DeepSeek-Prover-V2) use below.
+- the verifier's verdict is one bit at the end; partial verification turns it into a signal over unfinished work
+- [Baldur](https://arxiv.org/abs/2303.04910): repair from the error message, not the pass/fail bit — the model gets the failed proof and Isabelle/HOL's error text, and rewrites (First, Rabe, Ringer, Brun, ESEC/FSE 2023)
+- [HyperTree Proof Search](https://arxiv.org/abs/2205.11491): a learned critic scores each open goal's provability, composing up a partial proof tree to guide AlphaZero-style search (Lample et al., NeurIPS 2022)
+- [Math-Shepherd](https://arxiv.org/abs/2312.08935): no oracle grades a half-finished argument, so score a step by the fraction of rollouts from it that reach the right answer — a process reward without human labels (Wang et al. 2023)
+- [Gradual Program Verification](http://www.cs.cmu.edu/~aldrich/papers/vmcai2018-gradual-verification.pdf): partiality in the spec, not the search — a contract `φ ∧ ?` is checked statically for `φ` and by runtime checks for `?`, sound either way (Bader, Aldrich, Tanter, VMCAI 2018)
 
 ## Decomposition
 
