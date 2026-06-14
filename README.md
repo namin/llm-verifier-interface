@@ -16,6 +16,7 @@ See the [abstract](abstract.md).
 
 - [verifier_loop.py](verifier_loop.py): generate, verify, retry until Dafny accepts
 - [VerMCTS](https://github.com/namin/llm-verified-with-monte-carlo-tree-search): the retry generalized to Monte Carlo tree search on partial programs guided by the verifier
+- [ChopChop](https://arxiv.org/abs/2509.00360): the verifier moves *into the decoder* — constrained decoding that only emits programs satisfying a semantic property (equivalence to a reference, type safety), cast as a realizability problem solved by coinduction; correct-by-construction instead of generate-then-check (Nagy, Zhou, Polikarpova, D'Antoni, POPL 2026)
 - [COPRA](https://github.com/trishullab/copra): tactic-by-tactic proving in Lean or Rocq, with error feedback and backtracking
 - [CEGIS](https://people.csail.mit.edu/asolar/SynthesisCourse/Lecture17.htm): the classical loop: propose, verify, accumulate counterexamples
 - [cegis.py](cegis.py): CEGIS with an LLM as the synthesizer and Z3 as the verifier — the verifier returns a concrete counterexample on every failure, and they accumulate into the spec; the accumulation is the part [verifier_loop.py](verifier_loop.py) leaves out
@@ -47,6 +48,7 @@ See the [abstract](abstract.md).
 - [Guardians of the Agents](https://cacm.acm.org/practice/guardians-of-the-agents/): prompt injection is mixing code and data; have the LLM plan first, verify the plan, then execute (Meijer, CACM 2026)
 - [guardians](https://github.com/metareflection/guardians): a Python implementation: taint analysis, security automata, and Z3 preconditions on agent plans
 - [guardians-lemmascript](https://github.com/midspiral/guardians-lemmascript): the checks themselves proved sound in Dafny via LemmaScript; can be wired into henri-lemmascript
+- [Language-Based Agent Control](https://arxiv.org/abs/2605.12863): the typed analog of the Guardians discipline — the agent emits programs that must type-check before they run, with types encoding policies (capability sandboxing, information flow, data provenance), so unsafe plans are rejected statically (Zhou, D'Antoni, Polikarpova 2026); [Securing Agents With Tracked Capabilities](https://bracevac.org/assets/pdf/cais26.pdf) does the same in mainstream Scala 3 — the agent writes code in a capability-safe language where capabilities are program variables and capture checking enforces *local purity*, keeping sub-computations side-effect-free so classified data can't leak, with no significant loss in task performance (Odersky, Zhao, Xu, Bračevac, Pham, CAIS 2026)
 
 ## Self-Improving Agents
 
