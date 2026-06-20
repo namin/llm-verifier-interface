@@ -13,7 +13,7 @@ Two ideas, both fundamental and both still true after long context made VerMCTS'
   1. The verifier replaces the Monte Carlo rollout. Classic MCTS estimates a
      node's value by random simulation to the end. In a verified setting you have
      a SOUND oracle, so use it: prune branches it proves dead, and optimistically
-     value the ones it proves still-feasible. `evaluate()` below is the verifier,
+     value the ones it cannot rule out. `evaluate()` below is the verifier,
      not a dice roll. This is AlphaZero's move (Silver et al., 2017): drop the
      rollout, read an evaluator at the leaf. AlphaZero's evaluator is a learned
      value network; here it is a sound verifier, and the LLM would play the role
@@ -43,18 +43,19 @@ from typing import Optional
 
 # ---------------------------------------------------------------------------
 # The toy domain. Build TARGET from 1 by a sequence of ops. A state is
-# (value, ops). The "verifier" is two SOUND checks on a (partial) state:
+# (value, ops). The "verifier" is one SOUND check, classify(state):
 #   solved  value == TARGET
-#   alive   value <= TARGET   (ops never decrease, so overshoot is unreachable)
-#            AND the most you could still reach in the steps left is >= TARGET
-# `alive` is genuine partial verification: it rejects prefixes that provably
-# cannot be completed, with no rollout. The policy (which op next) is uniform —
-# this is exactly where an LLM would go.
+#   dead    value > TARGET (ops never decrease, so overshoot is unreachable),
+#           OR the most you could still reach in the steps left is < TARGET
+#   open    neither — not ruled out, not yet done
+# `dead` is genuine partial verification: it rejects prefixes that provably
+# cannot be completed, with no rollout. One call per state is the budgeted unit.
+# The policy (which op next) is uniform — this is exactly where an LLM would go.
 # ---------------------------------------------------------------------------
 
 # TARGET sits near the most you can reach in MAX_DEPTH steps, so the live corridor
-# is narrow: most prefixes either overshoot or can no longer catch up, and the
-# verifier's `alive` check prunes them. That is the regime where partial
+# is narrow: most prefixes either overshoot or can no longer catch up, and
+# classify prunes them as `dead`. That is the regime where partial
 # verification is informative and search pays off — slack makes every prefix look
 # fine and there is nothing for the verifier (or the search) to grip.
 OPS = [("+1", lambda v: v + 1), ("*2", lambda v: v * 2), ("*3", lambda v: v * 3)]
@@ -75,18 +76,24 @@ def max_reach(v, steps):
 
 
 class Verifier:
-    """Wraps the sound checks and counts calls — calls are the budgeted resource."""
-    def __init__(self):
+    """One sound check, classify(), against a hard budget of calls. The search
+    must check exhausted() before each call; the assert catches any overspend."""
+    def __init__(self, budget: int):
+        self.budget = budget
         self.calls = 0
 
-    def solved(self, state) -> bool:
-        self.calls += 1
-        return state[0] == TARGET
+    def exhausted(self) -> bool:
+        return self.calls >= self.budget
 
-    def alive(self, state) -> bool:
+    def classify(self, state) -> str:
+        assert not self.exhausted(), "verifier called past its budget"
         self.calls += 1
         v, ops = state
-        return v <= TARGET and max_reach(v, MAX_DEPTH - len(ops)) >= TARGET
+        if v == TARGET:
+            return "solved"
+        if v > TARGET or max_reach(v, MAX_DEPTH - len(ops)) < TARGET:
+            return "dead"
+        return "open"
 
 
 def render(state) -> str:
@@ -102,7 +109,7 @@ def render(state) -> str:
 
 class Node:
     __slots__ = ("state", "parent", "children", "untried", "N", "W",
-                 "value", "terminal", "solved")
+                 "value", "solved", "closed")
 
     def __init__(self, state, parent=None):
         self.state = state
@@ -112,23 +119,23 @@ class Node:
         self.N = 0
         self.W = 0.0
         self.value = 0.0
-        self.terminal = False
         self.solved = False
+        self.closed = False          # subtree fully explored — skipped in SELECT
 
     def full(self) -> bool:
         return self.untried is not None and not self.untried
 
 
 def evaluate(node, verifier) -> None:
-    """The rollout, replaced by the verifier: dead -> 0, solved/alive -> 1."""
-    if not verifier.alive(node.state):
-        node.value, node.terminal = 0.0, True              # pruned: provably dead
-    elif verifier.solved(node.state):
-        node.value, node.terminal, node.solved = 1.0, True, True
-    elif len(node.state[1]) >= MAX_DEPTH:
-        node.value, node.terminal = 0.0, True              # out of depth, unsolved
+    """The rollout, replaced by one verifier call: dead -> 0, solved/open -> 1.
+    `dead` already covers out-of-depth (no steps left), so nothing extra here."""
+    kind = verifier.classify(node.state)
+    if kind == "solved":
+        node.value, node.solved, node.closed = 1.0, True, True
+    elif kind == "dead":
+        node.value, node.closed = 0.0, True                # pruned
     else:
-        node.value = 1.0                                   # alive: optimistic upper bound
+        node.value = 1.0                                   # open: optimistic upper bound
 
 
 def backprop(node) -> None:
@@ -136,6 +143,12 @@ def backprop(node) -> None:
     while node:
         node.N += 1
         node.W += value
+        # Closed = solved/dead leaf, or fully expanded with every child closed.
+        # SELECT skips closed nodes, so this empties the frontier and lets the
+        # search stop once nothing expandable remains.
+        if not node.closed and node.full() and node.children \
+                and all(ch.closed for ch in node.children):
+            node.closed = True
         node = node.parent
 
 
@@ -158,26 +171,26 @@ def uct(node, c) -> float:
     return node.W / node.N + c * math.sqrt(math.log(node.parent.N) / node.N)
 
 
-def mcts(verifier, budget, rng, c=1.4) -> Optional[str]:
+def mcts(verifier, rng, c=1.4) -> Optional[str]:
     root = Node((START, ()))
-    evaluate(root, verifier)
+    evaluate(root, verifier)                                          # one call
     backprop(root)
-    while verifier.calls < budget:
+    # Stop on budget, or when the root closes (whole tree explored). A dead root
+    # closes on its first evaluation, so the loop never runs.
+    while not verifier.exhausted() and not root.closed:
         node = root
-        while node.children and node.full() and not node.terminal:      # SELECT
-            node = max(node.children, key=lambda n: uct(n, c))
-        if not node.terminal:                                            # EXPAND
-            if node.untried is None:
-                node.untried = list(range(len(OPS)))
-                rng.shuffle(node.untried)
-            if node.untried:
-                child = Node(step(node.state, node.untried.pop()), node)
-                node.children.append(child)
-                evaluate(child, verifier)                                # EVALUATE
-                node = child
-        backprop(node)                                                   # BACKPROP
-        if node.solved:
-            return render(node.state)
+        while node.full() and not node.closed:                       # SELECT
+            node = max((ch for ch in node.children if not ch.closed),
+                       key=lambda n: uct(n, c))
+        if node.untried is None:                                     # EXPAND
+            node.untried = list(range(len(OPS)))
+            rng.shuffle(node.untried)
+        child = Node(step(node.state, node.untried.pop()), node)
+        node.children.append(child)
+        evaluate(child, verifier)                                    # EVALUATE (one call)
+        backprop(child)                                              # BACKPROP
+        if child.solved:
+            return render(child.state)
     return None
 
 
@@ -187,17 +200,16 @@ def mcts(verifier, budget, rng, c=1.4) -> Optional[str]:
 # verifier proves dead. It cannot reuse a good prefix or shift budget toward it.
 # ---------------------------------------------------------------------------
 
-def best_of_n(verifier, budget, rng) -> Optional[str]:
-    while verifier.calls < budget:
+def best_of_n(verifier, rng) -> Optional[str]:
+    while not verifier.exhausted():
         state = (START, ())
-        for _ in range(MAX_DEPTH):
-            if verifier.solved(state):
+        while not verifier.exhausted():                # gate every call: no overshoot
+            kind = verifier.classify(state)
+            if kind == "solved":
                 return render(state)
-            if not verifier.alive(state):
+            if kind == "dead":
                 break                                  # dead line, start a new attempt
             state = step(state, rng.randrange(len(OPS)))
-        if verifier.solved(state):
-            return render(state)
     return None
 
 
@@ -208,8 +220,8 @@ def compare(budget=300, seeds=40):
     for name, search in (("MCTS", mcts), ("best-of-N", best_of_n)):
         wins, calls_to_win = 0, []
         for seed in range(seeds):
-            v = Verifier()
-            sol = search(v, budget, random.Random(seed))
+            v = Verifier(budget)
+            sol = search(v, random.Random(seed))
             if sol:
                 wins += 1
                 calls_to_win.append(v.calls)
@@ -223,6 +235,6 @@ def compare(budget=300, seeds=40):
 
 
 if __name__ == "__main__":
-    sol = mcts(Verifier(), budget=300, rng=random.Random(0))
+    sol = mcts(Verifier(300), random.Random(0))
     print("one MCTS solution:", sol, "=", eval(sol) if sol else None, "\n")
     compare()

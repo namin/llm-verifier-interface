@@ -17,7 +17,8 @@ Lean's `sorry`. A lemma with that body verifies vacuously and still hands its
               a hole — i.e. given only their statements, never their
               proofs. (A helper may still *call* the others; the stub's `ensures`
               is all that needs.)
-    assemble  every hole filled, nothing assumed: one fully sound proof.
+    assemble  every hole filled; a trusted wrapper requires the goal and the
+              auditor rules out assumptions: one fully sound proof.
 
 Why decomposition and not token-level tree search (VerMCTS): with a strong
 long-context model the live granularity is no longer the next line — the model
@@ -29,6 +30,7 @@ Run (Anthropic API or Bedrock, same setup as agent.py; needs `dafny` on PATH):
 """
 
 import re
+import subprocess
 import sys
 from typing import Optional
 
@@ -57,6 +59,18 @@ function rev(xs: List): List
 GOAL = "rev is an involution:  rev(rev(xs)) == xs  for every List xs"
 GOAL_LEMMA = "lemma RevRev(xs: List)\n  ensures rev(rev(xs)) == xs"
 
+# Trusted wrapper, appended by `assemble` and never generated. The audit rules
+# out assumptions; this rules out omission: the program verifies only if RevRev
+# really exists with a signature strong enough to discharge this goal. Rename or
+# weaken RevRev and RequiredGoal fails to verify.
+HARNESS = """
+lemma RequiredGoal(xs: List)
+  ensures rev(rev(xs)) == xs
+{
+  RevRev(xs);
+}
+"""
+
 PATH = "sketch_out.dfy"
 MAX_TRIES = 4
 
@@ -65,7 +79,8 @@ MAX_TRIES = 4
 # A hole is the token `HOLE_<Name>` standing in for lemma <Name>'s body.
 # `assemble` turns a sketch (the LLM's lemmas) into a full Dafny program: each
 # hole becomes either a supplied proof body or `assume false;` (stub = statement
-# only). The fixed PREAMBLE is prepended so the model never has to re-derive it.
+# only). PREAMBLE is prepended and the trusted HARNESS appended, so the model
+# never re-derives the definitions and cannot omit the goal.
 # ---------------------------------------------------------------------------
 
 def assemble(lemmas: str, fills: dict) -> str:
@@ -73,7 +88,7 @@ def assemble(lemmas: str, fills: dict) -> str:
     # run warnings-as-errors, so a bare `assume false;` would fail the verify.
     body = re.sub(r"HOLE_(\w+)",
                   lambda m: fills.get(m.group(1), "assume {:axiom} false;"), lemmas)
-    return PREAMBLE + "\n" + body
+    return PREAMBLE + "\n" + body + "\n" + HARNESS
 
 
 def holes(lemmas: str) -> list:
@@ -141,12 +156,28 @@ def fill_hole(lemmas: str, name: str) -> Optional[str]:
             f"Provide ONLY the proof body (Dafny statements, no braces) that should "
             f"replace HOLE_{name} in lemma {name}. You may call the other lemmas by "
             f"name; assume they hold.{feedback}")
-        body = filter_code(msg).strip().strip("{}").strip()
+        body = filter_code(msg).strip()
         ok, fb = verify(assemble(lemmas, {name: body}), PATH)   # others still holes
         if ok:
             return body
         feedback = f"\nThat body did not verify. Dafny said:\n{fb}\n"
     return None
+
+
+# ---------------------------------------------------------------------------
+# The audit. `dafny verify` passes the {:axiom} escapes, so a green verdict can't
+# back "nothing assumed" — a fill could smuggle in `assume {:axiom} false;` and
+# still verify. Dafny's soundness auditor flags them (assumes, {:axiom}s,
+# bodyless definitions, externs); a sound assembly has 0 findings.
+# ---------------------------------------------------------------------------
+
+def audit(path: str) -> tuple[bool, str]:
+    p = subprocess.run(["dafny", "audit", path],
+                       capture_output=True, text=True, timeout=120)
+    out = (p.stdout + p.stderr).strip()
+    # Audit findings still produce exit code 0, so check the finding count too.
+    m = re.search(r"completed with (\d+) finding", out)
+    return p.returncode == 0 and m is not None and m.group(1) == "0", out
 
 
 # ---------------------------------------------------------------------------
@@ -169,13 +200,20 @@ def main():
         fills[name] = body
         print(f"  {name}: filled and verified (others still holes)")
 
-    print("\n--- stage 3: assemble (nothing assumed) ---")
+    print("\n--- stage 3: assemble, verify & audit (nothing assumed) ---")
     program = assemble(lemmas, fills)
-    assert "assume {:axiom} false" not in program   # a sound proof has no holes left
-    ok, fb = verify(program, PATH)
-    print(("\n" + program + "\nFULLY VERIFIED — no assumptions remain.") if ok
-          else f"assembly failed: {fb}")
-    return 0 if ok else 1
+    ok, fb = verify(program, PATH)          # proves the goal, modulo any assumptions
+    if not ok:
+        print(f"assembly did not verify: {fb}")
+        return 1
+    clean, report = audit(PATH)             # confirms there are NO assumptions
+    if not clean:                           # verified, but vacuously — the lesson
+        print("assembly verifies but the auditor found trust escapes "
+              "(a fill smuggled in an assumption):\n" + report)
+        return 1
+    print("\n" + program +
+          "\nFULLY VERIFIED and AUDITED — 0 findings, no assumptions remain.")
+    return 0
 
 
 if __name__ == "__main__":

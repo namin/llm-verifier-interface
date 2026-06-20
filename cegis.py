@@ -17,9 +17,11 @@ What makes a loop CEGIS (and not just retry-until-it-passes) is two things:
      that only grows. The synthesizer is re-run against the whole accumulated
      set each round. The set of counterexamples is the entire memory of the loop.
 
-The contrast with the two neighbours in this repo:
+Two reference points, one outside this repo and one inside it:
 
-  * minisynth's one-shot solve hands Z3 the quantifier directly:
+  * minisynth (Adrian Sampson's solver-only synthesizer,
+    https://www.cs.cornell.edu/~asampson/blog/minisynth.html) does a one-shot
+    solve, handing Z3 the quantifier directly:
         find holes such that  FORALL x. sketch(holes, x) == spec(x)
     one query, no loop. CEGIS instead *removes* the FORALL: it asks the
     synthesizer only "be right on these finitely many x" (quantifier-free), and
@@ -28,9 +30,10 @@ The contrast with the two neighbours in this repo:
 
   * verifier_loop.py has the loop shape (propose, check, repeat) but keeps only
     the LAST failure in the prompt. CEGIS keeps them ALL. That accumulation is
-    the difference, and it is why this loop converges: the synthesizer can never
-    re-make a mistake the verifier has already pinned to a concrete input,
-    because that input stays in front of it forever.
+    the difference. A classical constrained synthesizer cannot repeat an earlier
+    mistake — the examples are hard constraints on it. Here the synthesizer is an
+    LLM, so accumulation gives it persistent feedback (every pinned input stays in
+    front of it) but does not guarantee convergence: the model may ignore them.
 
 Run (Anthropic API or Bedrock, same setup as agent.py; needs z3-solver):
     pip install z3-solver anthropic
@@ -38,6 +41,8 @@ Run (Anthropic API or Bedrock, same setup as agent.py; needs z3-solver):
     python cegis.py relu
 """
 
+import ast
+import operator
 import os
 import re
 import sys
@@ -87,24 +92,55 @@ SPECS = {
 
 
 # ---------------------------------------------------------------------------
-# A candidate is a Python expression in the single variable `x`, restricted to a
-# grammar Z3 understands: integer literals, x, + - *, and If(cond, a, b). We
-# evaluate it with `x` bound to a Z3 symbol, so operator overloading turns the
-# expression into a Z3 TERM (minisynth's trick) — `x * 2` becomes the term x*2.
+# A candidate is an expression in `x` from a tiny grammar: int literals, x,
+# + - *, and If(cond, a, b). We parse it and walk the tree, building the Z3 term
+# structurally — overloaded operators still do the work (`x*2` becomes x*2). The
+# interpreter below IS the candidate language; no eval, so no sandbox to get wrong.
 # ---------------------------------------------------------------------------
 
+BIN = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul}
+CMP = {ast.Eq: operator.eq, ast.NotEq: operator.ne,
+       ast.Lt: operator.lt, ast.LtE: operator.le,
+       ast.Gt: operator.gt, ast.GtE: operator.ge}
+
+
 def build(expr: str, x: z3.ExprRef) -> z3.ExprRef:
-    # Restricted builtins: the input is LLM-generated, and we eval it. Locking
-    # __builtins__ to {} blocks __import__ and friends; the grammar we ask for
-    # needs only `x` and `If`.
-    term = eval(expr, {"__builtins__": {}}, {"x": x, "If": z3.If})
-    return z3.IntVal(term) if isinstance(term, int) else term
+    # eval would do it, but expr is LLM-generated and {"__builtins__": {}} is no
+    # sandbox (attribute-walking escapes it):
+    #     term = eval(expr, {"__builtins__": {}}, {"x": x, "If": z3.If})
+    #     return z3.IntVal(term) if isinstance(term, int) else term
+    # So we walk the tree and build the Z3 term structurally instead.
+    def go(node):
+        if isinstance(node, ast.Expression):
+            return go(node.body)
+        if isinstance(node, ast.Constant) and type(node.value) is int:
+            return z3.IntVal(node.value)
+        if isinstance(node, ast.Name) and node.id == "x":
+            return x
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            return go(node.operand) if isinstance(node.op, ast.UAdd) else -go(node.operand)
+        if isinstance(node, ast.BinOp) and type(node.op) in BIN:
+            return BIN[type(node.op)](go(node.left), go(node.right))
+        if (isinstance(node, ast.Compare) and len(node.ops) == 1
+                and type(node.ops[0]) in CMP):
+            return CMP[type(node.ops[0])](go(node.left), go(node.comparators[0]))
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "If" and len(node.args) == 3
+                and not node.keywords):
+            return z3.If(*(go(arg) for arg in node.args))
+        raise ValueError(f"disallowed syntax: {ast.dump(node, include_attributes=False)}")
+
+    term = go(ast.parse(expr, mode="eval"))
+    if not z3.is_int(term):
+        raise ValueError("candidate must be integer-valued")
+    return term
 
 
 # ---------------------------------------------------------------------------
 # The verifier (deductive). Ask Z3 for ANY input that violates the spec:
-#     SAT  exists x. NOT phi(x, candidate(x))   ->  a concrete counterexample
-#     UNSAT                                      ->  correct for ALL inputs
+#     SAT      exists x. NOT phi(x, candidate(x))  ->  a concrete counterexample
+#     UNSAT                                        ->  correct for ALL inputs
+#     UNKNOWN  Z3 could not decide  ->  NOT a certificate (only UNSAT certifies)
 # When it fails, we also ask the spec for a witness of a correct output at that
 # input, purely to give the synthesizer a more useful hint.
 # ---------------------------------------------------------------------------
@@ -112,10 +148,14 @@ def build(expr: str, x: z3.ExprRef) -> z3.ExprRef:
 def verify(spec: Spec, term: z3.ExprRef, x: z3.ExprRef):
     s = z3.Solver()
     s.add(z3.Not(spec.phi(x, term)))
-    if s.check() != z3.sat:
+    r = s.check()
+    if r == z3.unsat:
         return None                       # certified: no input breaks the spec
+    if r == z3.unknown:                   # Z3 gave up — never a certificate
+        return ("unknown", s.reason_unknown())
     m = s.model()
-    x0 = m[x].as_long()
+    # Z3 may omit x from the model when every value violates the spec; complete it.
+    x0 = m.eval(x, model_completion=True).as_long()
     wrong = m.eval(term, model_completion=True).as_long()
     return x0, wrong, witness(spec, x0)
 
@@ -196,6 +236,9 @@ def cegis(spec: Spec, synth: Callable = synthesize,
         if cex is None:
             print(f"         VERIFIED for all integers: {spec.name}(x) = {expr}")
             return expr
+        if cex[0] == "unknown":                       # undecided — fail closed
+            print(f"         Z3 returned unknown ({cex[1]}); NOT certified")
+            return None
         x0, wrong, correct = cex
         print(f"         counterexample x={x0}: got {wrong}, want {correct}")
         if not any(e[0] == x0 for e in examples):     # accumulate (dedup by input)
