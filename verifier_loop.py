@@ -62,6 +62,8 @@ def verify(code: str, path: str = "out.dfy") -> tuple[bool, str]:
 def step(instructions: str, code: Optional[str] = None,
          feedback: Optional[str] = None, steps: int = 0,
          max_steps: int = 3) -> Optional[str]:
+    if steps >= max_steps:           # budget spent; the verifier never accepted
+        return None
     prompt = f"""
 Generate Dafny code for the following instructions:
 {instructions}
@@ -83,9 +85,7 @@ The output of the verification was:
         print(f"Success! {feedback}")
         return code  # the only success exit: Dafny said yes
     print(f"Failed! {feedback}")
-    if steps < max_steps:
-        return step(instructions, code, feedback, steps + 1, max_steps)
-    return None
+    return step(instructions, code, feedback, steps + 1, max_steps)
 
 
 if __name__ == "__main__":
