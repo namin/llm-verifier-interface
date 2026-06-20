@@ -25,8 +25,12 @@ Two ideas, both fundamental and both still true after long context made VerMCTS'
 The controlled experiment at the bottom makes the payoff visible: MCTS vs
 best-of-N with the SAME policy, the SAME verifier, and the SAME call budget. The
 only difference is structure — MCTS builds a tree (shared prefixes, UCT) while
-best-of-N samples independent attempts from the root. MCTS wins, and it wins
-purely on structure.
+best-of-N samples independent attempts from the root. Sweeping the budget in two
+regimes shows the catch: when the verifier is informative (a narrow corridor it
+prunes hard) MCTS pays a small startup cost then dominates on structure alone;
+when it is uninformative (lots of slack, little it can prune) the tree is dead
+weight and best-of-N keeps pace. Structure pays off exactly to the extent the
+partial verifier is informative.
 
 Granularity is the design knob, not part of the algorithm. Here a step is a
 toy arithmetic op; swap in: tactics (AlphaProof), subgoals (DeepSeek-Prover),
@@ -77,9 +81,13 @@ def max_reach(v, steps):
 
 class Verifier:
     """One sound check, classify(), against a hard budget of calls. The search
-    must check exhausted() before each call; the assert catches any overspend."""
-    def __init__(self, budget: int):
+    must check exhausted() before each call; the assert catches any overspend.
+    target and max_depth ARE the obligation — and how tight the live corridor is,
+    the knob the ablation at the bottom turns."""
+    def __init__(self, budget: int, target: int = TARGET, max_depth: int = MAX_DEPTH):
         self.budget = budget
+        self.target = target
+        self.max_depth = max_depth
         self.calls = 0
 
     def exhausted(self) -> bool:
@@ -89,9 +97,9 @@ class Verifier:
         assert not self.exhausted(), "verifier called past its budget"
         self.calls += 1
         v, ops = state
-        if v == TARGET:
+        if v == self.target:
             return "solved"
-        if v > TARGET or max_reach(v, MAX_DEPTH - len(ops)) < TARGET:
+        if v > self.target or max_reach(v, self.max_depth - len(ops)) < self.target:
             return "dead"
         return "open"
 
@@ -214,24 +222,48 @@ def best_of_n(verifier, rng) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# The ablation. One budget point can look cherry-picked, so sweep the budget and
+# report solve-rate — the success-probability curve — in two regimes that differ
+# ONLY in how informative the partial verifier is. Same policy, same verifier,
+# same budgets throughout; only MCTS's tree and the regime change.
+#
+#   informative    (TARGET, MAX_DEPTH): target near the most reachable, the
+#                  corridor is narrow, classify prunes most prefixes as `dead`.
+#                  MCTS pays a small startup cost, then dominates: pruning frees
+#                  budget and shared prefixes are reused.
+#   uninformative  (LOOSE_*): lots of depth slack, almost every prefix stays
+#                  `open`, classify rarely prunes. With no signal to exploit the
+#                  tree is dead weight — best-of-N's independent dives keep pace
+#                  or lead until the budget is large enough for both to saturate.
+#
+# The lesson is not "MCTS wins" but "structure pays off exactly to the extent the
+# partial verifier is informative."
+# ---------------------------------------------------------------------------
 
-def compare(budget=300, seeds=40):
-    rows = []
-    for name, search in (("MCTS", mcts), ("best-of-N", best_of_n)):
-        wins, calls_to_win = 0, []
-        for seed in range(seeds):
-            v = Verifier(budget)
-            sol = search(v, random.Random(seed))
-            if sol:
-                wins += 1
-                calls_to_win.append(v.calls)
-        med = sorted(calls_to_win)[len(calls_to_win) // 2] if calls_to_win else None
-        rows.append((name, wins, seeds, med))
-    print(f"build {TARGET} from {START}; budget = {budget} verifier calls, "
-          f"{seeds} seeds; same policy + verifier for both\n")
-    print(f"  {'method':10}  {'solved':>10}  {'median calls to solve':>22}")
-    for name, wins, total, med in rows:
-        print(f"  {name:10}  {wins:>5}/{total:<4}  {str(med) if med else '—':>22}")
+LOOSE_TARGET, LOOSE_DEPTH = 60, 14
+
+
+def solved(search, budget, seeds, target, max_depth) -> int:
+    return sum(bool(search(Verifier(budget, target, max_depth), random.Random(s)))
+               for s in range(seeds))
+
+
+def sweep(label, target, max_depth, budgets, seeds=40):
+    print(f"{label}\n  {'budget':>6}  {'MCTS':>7}  {'best-of-N':>9}")
+    for b in budgets:
+        m = solved(mcts, b, seeds, target, max_depth)
+        n = solved(best_of_n, b, seeds, target, max_depth)
+        print(f"  {b:>6}  {f'{m}/{seeds}':>7}  {f'{n}/{seeds}':>9}")
+    print()
+
+
+def compare(budgets=(20, 40, 80, 160, 320), seeds=40):
+    sweep(f"informative — build {TARGET} from {START} in <={MAX_DEPTH} steps "
+          f"(narrow corridor; classify prunes hard)",
+          TARGET, MAX_DEPTH, budgets, seeds)
+    sweep(f"uninformative — build {LOOSE_TARGET} from {START} in <={LOOSE_DEPTH} "
+          f"steps (lots of slack; classify rarely prunes)",
+          LOOSE_TARGET, LOOSE_DEPTH, budgets, seeds)
 
 
 if __name__ == "__main__":
