@@ -156,12 +156,13 @@ def run_turn(client, tools, messages, session_allow):
                 print(block.text)
 
         # No tool calls → the turn is done.
-        if reply.stop_reason != "tool_use":
+        calls = [b for b in reply.content if b.type == "tool_use"]
+        if not calls:
             return
 
         # Run each requested tool and send the results back as a user message.
         results = []
-        for call in (b for b in reply.content if b.type == "tool_use"):
+        for call in calls:
             tool = by_name[call.name]
             ok, denial = allowed(tool, call.input, session_allow)
             if not ok:

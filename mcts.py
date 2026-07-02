@@ -116,9 +116,6 @@ def render(state) -> str:
 # ---------------------------------------------------------------------------
 
 class Node:
-    __slots__ = ("state", "parent", "children", "untried", "N", "W",
-                 "value", "solved", "closed")
-
     def __init__(self, state, parent=None):
         self.state = state
         self.parent = parent
@@ -126,7 +123,6 @@ class Node:
         self.untried = None          # set lazily to the shuffled op indices
         self.N = 0
         self.W = 0.0
-        self.value = 0.0
         self.solved = False
         self.closed = False          # subtree fully explored — skipped in SELECT
 
@@ -134,20 +130,20 @@ class Node:
         return self.untried is not None and not self.untried
 
 
-def evaluate(node, verifier) -> None:
+def evaluate(node, verifier) -> float:
     """The rollout, replaced by one verifier call: dead -> 0, solved/open -> 1.
     `dead` already covers out-of-depth (no steps left), so nothing extra here."""
     kind = verifier.classify(node.state)
     if kind == "solved":
-        node.value, node.solved, node.closed = 1.0, True, True
-    elif kind == "dead":
-        node.value, node.closed = 0.0, True                # pruned
-    else:
-        node.value = 1.0                                   # open: optimistic upper bound
+        node.solved = node.closed = True
+        return 1.0
+    if kind == "dead":
+        node.closed = True                                 # pruned
+        return 0.0
+    return 1.0                                             # open: optimistic upper bound
 
 
-def backprop(node) -> None:
-    value = node.value
+def backprop(node, value) -> None:
     while node:
         node.N += 1
         node.W += value
@@ -179,10 +175,9 @@ def uct(node, c) -> float:
     return node.W / node.N + c * math.sqrt(math.log(node.parent.N) / node.N)
 
 
-def mcts(verifier, rng, c=1.4) -> Optional[str]:
+def mcts(verifier, rng, c=1.4) -> Optional[tuple]:
     root = Node((START, ()))
-    evaluate(root, verifier)                                          # one call
-    backprop(root)
+    backprop(root, evaluate(root, verifier))                          # one call
     # Stop on budget, or when the root closes (whole tree explored). A dead root
     # closes on its first evaluation, so the loop never runs.
     while not verifier.exhausted() and not root.closed:
@@ -195,10 +190,10 @@ def mcts(verifier, rng, c=1.4) -> Optional[str]:
             rng.shuffle(node.untried)
         child = Node(step(node.state, node.untried.pop()), node)
         node.children.append(child)
-        evaluate(child, verifier)                                    # EVALUATE (one call)
-        backprop(child)                                              # BACKPROP
+        value = evaluate(child, verifier)                            # EVALUATE (one call)
+        backprop(child, value)                                       # BACKPROP
         if child.solved:
-            return render(child.state)
+            return child.state
     return None
 
 
@@ -208,13 +203,13 @@ def mcts(verifier, rng, c=1.4) -> Optional[str]:
 # verifier proves dead. It cannot reuse a good prefix or shift budget toward it.
 # ---------------------------------------------------------------------------
 
-def best_of_n(verifier, rng) -> Optional[str]:
+def best_of_n(verifier, rng) -> Optional[tuple]:
     while not verifier.exhausted():
         state = (START, ())
         while not verifier.exhausted():                # gate every call: no overshoot
             kind = verifier.classify(state)
             if kind == "solved":
-                return render(state)
+                return state
             if kind == "dead":
                 break                                  # dead line, start a new attempt
             state = step(state, rng.randrange(len(OPS)))
@@ -268,5 +263,5 @@ def compare(budgets=(20, 40, 80, 160, 320), seeds=40):
 
 if __name__ == "__main__":
     sol = mcts(Verifier(300), random.Random(0))
-    print("one MCTS solution:", sol, "=", eval(sol) if sol else None, "\n")
+    print("one MCTS solution:", f"{render(sol)} = {sol[0]}" if sol else None, "\n")
     compare()
