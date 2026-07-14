@@ -88,6 +88,12 @@ SPECS = {
     "double": Spec(
         "double", "twice x",
         lambda x, y: y == x + x),
+    # Relational (like abs), and the three-way max hides a non-obvious
+    # breakpoint at x=3 — so the LLM usually needs a few counterexamples.
+    "max3": Spec(
+        "max3", "the largest of the three values x, twice x, and 6",
+        lambda x, y: z3.And(y >= x, y >= 2 * x, y >= 6,
+                            z3.Or(y == x, y == 2 * x, y == 6))),
 }
 
 
